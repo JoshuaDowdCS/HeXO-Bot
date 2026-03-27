@@ -95,13 +95,17 @@ def main():
     
     # Camera
     cx, cy = WIDTH // 2, HEIGHT // 2
-    is_dragging = False
     
     hover_hex = None
     error_msg = ""
     
+    cached_legal_moves = game.get_legal_moves()
+    
     while running:
-        legal_moves = game.get_legal_moves()
+        actual_legal_moves = game.get_legal_moves()
+        if game.placements_this_turn == 0:
+            cached_legal_moves = game.get_legal_moves()
+            
         events = pygame.event.get()
         
         for event in events:
@@ -111,18 +115,13 @@ def main():
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 # Left click -> Place piece
                 if not game.done and game.current_player == human_player:
-                    if hover_hex in legal_moves:
+                    if hover_hex in actual_legal_moves:
                         game.step(*hover_hex)
                         error_msg = ""
                     else:
                         error_msg = "Invalid move (Too far or cell occupied)"
                         
             elif event.type == pygame.MOUSEMOTION:
-                # Update drag camera
-                if pygame.mouse.get_pressed()[2] or pygame.mouse.get_pressed()[1]:  # Right or Middle drag
-                    cx += event.rel[0]
-                    cy += event.rel[1]
-                
                 # Update hover
                 mx, my = event.pos
                 hover_hex = pixel_to_axial(mx, my, cx, cy)
@@ -147,7 +146,7 @@ def main():
         # Render
         screen.fill(BG_COLOR)
         
-        draw_hexes = set(game.board.keys()).union(legal_moves)
+        draw_hexes = set(game.board.keys()).union(cached_legal_moves)
         
         for (q, r) in draw_hexes:
             hx, hy = axial_to_pixel(q, r, cx, cy)
@@ -181,8 +180,8 @@ def main():
             turn_str = f"Current Turn: Player {game.current_player}  |  Pieces needed: {remaining}"
             screen.blit(font.render(turn_str, True, TEXT_COLOR), (20, 50))
             
-            controls_str = "L-Click: Place | R-Click: Drag/Pan"
-            screen.blit(font.render(controls_str, True, (150, 150, 150)), (WIDTH - 250, 20))
+            controls_str = "L-Click: Place"
+            screen.blit(font.render(controls_str, True, (150, 150, 150)), (WIDTH - 150, 20))
             
             if error_msg:
                 screen.blit(font.render(error_msg, True, (255, 100, 100)), (20, 80))
