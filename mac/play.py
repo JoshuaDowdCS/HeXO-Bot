@@ -130,7 +130,8 @@ def main():
     ai_player = 2
 
     while not game.done:
-        render_board(game)
+        if game.placements_this_turn == 0:
+            render_board(game)
 
         if game.current_player == human_player:
             expected = 1 if (game.turn_number == 1 and game.current_player == 1) else 2

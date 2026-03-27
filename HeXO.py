@@ -78,7 +78,7 @@ class HeXOGame:
 
         zone = set()
         for pos in self.board:
-            zone.update(get_cells_within_distance(pos, 1))
+            zone.update(get_cells_within_distance(pos, 8))
 
         return zone - set(self.board.keys())
 
@@ -91,7 +91,7 @@ class HeXOGame:
         node_set = set()
         for pos in self.board:
             node_set.add(pos)
-            node_set.update(get_cells_within_distance(pos, 1))
+            node_set.update(get_cells_within_distance(pos, 8))
 
         if not node_set:
             node_set.add((0, 0))

@@ -49,7 +49,7 @@ def self_play(model, num_games=SELF_PLAY_GAMES, num_sims=SELF_PLAY_SIMS,
     experiences = []
 
     pbar = tqdm(range(num_games), desc="  Self-play", unit="game",
-                bar_format="  {desc}: {bar:30} {n_fmt}/{total_fmt} games [{elapsed}<{remaining}]")
+                bar_format="  {desc}: {bar:30} {n_fmt}/{total_fmt} games [{elapsed}<{remaining}] {postfix}")
     for game_idx in pbar:
         game = HeXOGame()
         mcts_engine = MCTS(model)
@@ -141,7 +141,7 @@ def evaluate_models(challenger, best_model, num_games=EVAL_GAMES, num_sims=EVAL_
     challenger_wins = 0
 
     pbar = tqdm(range(num_games), desc="  Eval", unit="game",
-                bar_format="  {desc}: {bar:30} {n_fmt}/{total_fmt} games [{elapsed}<{remaining}]")
+                bar_format="  {desc}: {bar:30} {n_fmt}/{total_fmt} games [{elapsed}<{remaining}] {postfix}")
     for i in pbar:
         game = HeXOGame()
         challenger_player = 1 if i % 2 == 0 else 2
@@ -190,7 +190,7 @@ def main():
         num_steps = max(1, len(new_data) // 16)
         losses = []
         pbar = tqdm(range(num_steps), desc="  Training", unit="step",
-                    bar_format="  {desc}: {bar:30} {n_fmt}/{total_fmt} steps [{elapsed}<{remaining}]")
+                    bar_format="  {desc}: {bar:30} {n_fmt}/{total_fmt} steps [{elapsed}<{remaining}] {postfix}")
         for step in pbar:
             metrics = train_step(challenger, optimizer, replay_buffer)
             if metrics:
