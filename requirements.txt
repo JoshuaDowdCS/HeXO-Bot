@@ -1,3 +1,4 @@
-torch>=2.0
-torch-geometric>=2.4
+torch>=2.0.0
+torch-geometric
+pygame>=2.4
 numpy

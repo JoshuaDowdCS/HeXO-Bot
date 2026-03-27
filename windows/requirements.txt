@@ -4,3 +4,4 @@
 # Then install:
 torch-geometric>=2.4
 numpy
+pygame
