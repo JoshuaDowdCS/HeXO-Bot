@@ -77,7 +77,12 @@ class HeXOGame:
             return {(0, 0)}  # First move
 
         zone = set()
-        for pos in self.board:
+        if self.placements_this_turn > 0:
+            prior_pieces = list(self.board.keys())[:-self.placements_this_turn]
+        else:
+            prior_pieces = list(self.board.keys())
+
+        for pos in prior_pieces:
             zone.update(get_cells_within_distance(pos, 8))
 
         return zone - set(self.board.keys())
@@ -88,10 +93,17 @@ class HeXOGame:
         Nodes: all occupied cells + empty cells within distance 1 of any occupied cell.
         Features: [is_current_player, is_opponent, is_empty, q, r]
         """
+        if self.placements_this_turn > 0:
+            prior_pieces = list(self.board.keys())[:-self.placements_this_turn]
+        else:
+            prior_pieces = list(self.board.keys())
+
         node_set = set()
+        for pos in prior_pieces:
+            node_set.update(get_cells_within_distance(pos, 8))
+            
         for pos in self.board:
             node_set.add(pos)
-            node_set.update(get_cells_within_distance(pos, 8))
 
         if not node_set:
             node_set.add((0, 0))

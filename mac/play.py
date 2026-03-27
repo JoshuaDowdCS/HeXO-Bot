@@ -99,12 +99,8 @@ def main():
     hover_hex = None
     error_msg = ""
     
-    cached_legal_moves = game.get_legal_moves()
-    
     while running:
-        actual_legal_moves = game.get_legal_moves()
-        if game.placements_this_turn == 0:
-            cached_legal_moves = game.get_legal_moves()
+        legal_moves = game.get_legal_moves()
             
         events = pygame.event.get()
         
@@ -115,7 +111,7 @@ def main():
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 # Left click -> Place piece
                 if not game.done and game.current_player == human_player:
-                    if hover_hex in actual_legal_moves:
+                    if hover_hex in legal_moves:
                         game.step(*hover_hex)
                         error_msg = ""
                     else:
@@ -146,7 +142,7 @@ def main():
         # Render
         screen.fill(BG_COLOR)
         
-        draw_hexes = set(game.board.keys()).union(cached_legal_moves)
+        draw_hexes = set(game.board.keys()).union(legal_moves)
         
         for (q, r) in draw_hexes:
             hx, hy = axial_to_pixel(q, r, cx, cy)
