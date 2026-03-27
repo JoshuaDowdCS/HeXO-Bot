@@ -11,7 +11,7 @@ from mcts import MCTS
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else ('mps' if torch.backends.mps.is_available() else 'cpu'))
 
 # GUI Constants
-HEX_SIZE = 25
+HEX_SIZE = 25.0
 WIDTH = 800
 HEIGHT = 600
 FPS = 30
@@ -84,6 +84,7 @@ def get_ai_move(model, game, num_sims=50):
     return best_move
 
 def main():
+    global HEX_SIZE
     model = load_model()
     game = HeXOGame()
     
@@ -118,9 +119,24 @@ def main():
                         error_msg = "Invalid move (Too far or cell occupied)"
                         
             elif event.type == pygame.MOUSEMOTION:
-                # Update hover
-                mx, my = event.pos
-                hover_hex = pixel_to_axial(mx, my, cx, cy)
+                if pygame.mouse.get_pressed()[2] or pygame.mouse.get_pressed()[1]:  # Right or Middle drag
+                    cx += event.rel[0]
+                    cy += event.rel[1]
+                
+            elif event.type == pygame.MOUSEWHEEL:
+                zoom_factor = 1.1 if event.y > 0 else (1/1.1)
+                mx, my = pygame.mouse.get_pos()
+                
+                # Center zoom on mouse pointer
+                cx = mx - (mx - cx) * zoom_factor
+                cy = my - (my - cy) * zoom_factor
+                
+                HEX_SIZE *= zoom_factor
+                HEX_SIZE = max(5.0, min(150.0, HEX_SIZE))
+                
+        # Update hover hex every frame based on pure mouse pos (catches zoom shifts too)
+        mx, my = pygame.mouse.get_pos()
+        hover_hex = pixel_to_axial(mx, my, cx, cy)
                 
         # Handle AI Turn (Blocking)
         if not game.done and game.current_player == ai_player:
@@ -176,8 +192,8 @@ def main():
             turn_str = f"Current Turn: Player {game.current_player}  |  Pieces needed: {remaining}"
             screen.blit(font.render(turn_str, True, TEXT_COLOR), (20, 50))
             
-            controls_str = "L-Click: Place"
-            screen.blit(font.render(controls_str, True, (150, 150, 150)), (WIDTH - 150, 20))
+            controls_str = "L-Click: Place | R-Click: Drag | Scroll: Zoom"
+            screen.blit(font.render(controls_str, True, (150, 150, 150)), (WIDTH - 350, 20))
             
             if error_msg:
                 screen.blit(font.render(error_msg, True, (255, 100, 100)), (20, 80))
