@@ -11,6 +11,9 @@ class HeXOGame:
         self.placements_this_turn = 0
         self.done = False
         self.winner = None
+        self._graph_cache = None
+        self._cached_prior_pieces = None
+        self._base_x_cache = None
 
     def copy(self):
         g = HeXOGame.__new__(HeXOGame)
@@ -20,6 +23,15 @@ class HeXOGame:
         g.placements_this_turn = self.placements_this_turn
         g.done = self.done
         g.winner = self.winner
+        # Share the cache securely
+        if hasattr(self, '_graph_cache'):
+            g._graph_cache = self._graph_cache
+            g._cached_prior_pieces = self._cached_prior_pieces
+            g._base_x_cache = self._base_x_cache
+        else:
+            g._graph_cache = None
+            g._cached_prior_pieces = None
+            g._base_x_cache = None
         return g
 
     def step(self, q, r):
@@ -90,7 +102,7 @@ class HeXOGame:
     def get_graph(self):
         """
         Build a graph for the GNN.
-        Nodes: all occupied cells + empty cells within distance 1 of any occupied cell.
+        Nodes: all occupied cells + empty cells within defined radius.
         Features: [is_current_player, is_opponent, is_empty, q, r]
         """
         if self.placements_this_turn > 0:
@@ -98,41 +110,61 @@ class HeXOGame:
         else:
             prior_pieces = list(self.board.keys())
 
-        node_set = set()
-        for pos in prior_pieces:
-            node_set.update(get_cells_within_distance(pos, 8))
-            
-        for pos in self.board:
-            node_set.add(pos)
+        prior_pieces_tuple = tuple(prior_pieces)
 
-        if not node_set:
-            node_set.add((0, 0))
-
-        sorted_nodes = sorted(node_set)
-        node_to_idx = {n: i for i, n in enumerate(sorted_nodes)}
-
-        # Features are relative to the current player
-        features = []
-        for q, r in sorted_nodes:
-            owner = self.board.get((q, r))
-            is_me = 1.0 if owner == self.current_player else 0.0
-            is_opp = 1.0 if (owner is not None and owner != self.current_player) else 0.0
-            is_empty = 1.0 if owner is None else 0.0
-            features.append([is_me, is_opp, is_empty, float(q), float(r)])
-
-        x = torch.tensor(features, dtype=torch.float)
-
-        # Edges: hex neighbors
-        edges = []
-        for i, (q, r) in enumerate(sorted_nodes):
-            for nb in get_neighbors(q, r):
-                j = node_to_idx.get(nb)
-                if j is not None:
-                    edges.append([i, j])
-
-        if edges:
-            edge_index = torch.tensor(edges, dtype=torch.long).t().contiguous()
+        # Use cache if graph boundary pieces haven't changed (which is true mid-turn)
+        if hasattr(self, '_cached_prior_pieces') and self._cached_prior_pieces == prior_pieces_tuple and self._graph_cache is not None:
+            sorted_nodes, node_to_idx, edge_index = self._graph_cache
+            base_x = self._base_x_cache
         else:
-            edge_index = torch.empty((2, 0), dtype=torch.long)
+            node_set = set()
+            for pos in prior_pieces:
+                node_set.update(get_cells_within_distance(pos, 8))
+                
+            for pos in self.board:
+                node_set.add(pos)
+
+            if not node_set:
+                node_set.add((0, 0))
+
+            sorted_nodes = sorted(node_set)
+            node_to_idx = {n: i for i, n in enumerate(sorted_nodes)}
+
+            # Cache the base features tensor (coordinates)
+            base_x = torch.zeros((len(sorted_nodes), 5), dtype=torch.float)
+            for i, (q, r) in enumerate(sorted_nodes):
+                base_x[i, 3] = float(q)
+                base_x[i, 4] = float(r)
+
+            edges = []
+            for i, (q, r) in enumerate(sorted_nodes):
+                for nb in get_neighbors(q, r):
+                    j = node_to_idx.get(nb)
+                    if j is not None:
+                        edges.append([i, j])
+
+            if edges:
+                edge_index = torch.tensor(edges, dtype=torch.long).t().contiguous()
+            else:
+                edge_index = torch.empty((2, 0), dtype=torch.long)
+                
+            self._graph_cache = (sorted_nodes, node_to_idx, edge_index)
+            self._cached_prior_pieces = prior_pieces_tuple
+            self._base_x_cache = base_x
+
+        # Deep copy the pre-allocated tensor
+        x = base_x.clone()
+        # Initialize all nodes as empty
+        x[:, 2] = 1.0
+
+        # Only loop over occupied pieces (~40 items) instead of all nodes (~8000 items)
+        for (q, r), owner in self.board.items():
+            idx = node_to_idx.get((q, r))
+            if idx is not None:
+                x[idx, 2] = 0.0  # Mark not empty
+                if owner == self.current_player:
+                    x[idx, 0] = 1.0
+                else:
+                    x[idx, 1] = 1.0
 
         return x, edge_index, sorted_nodes
