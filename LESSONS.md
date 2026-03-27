@@ -1,0 +1,15 @@
+# HeXO Lessons Learned
+
+- **Variable shadowing in MCTS**: Using the same variable name (`node`) for tree traversal and as a dict comprehension variable during expansion silently breaks the backup phase. Always use distinct names for tree nodes vs. board coordinates.
+- **Per-graph softmax is critical**: When using PyG `Batch`, all node features are concatenated. Applying `softmax(dim=0)` across the entire batch treats nodes from different games as one distribution. Must use scatter operations to compute per-graph softmax.
+- **Policy targets must be aligned with batching**: Naively `torch.cat`-ing policy targets from different games creates a flat vector that doesn't align with `Batch.from_data_list`. Storing targets as attributes on `Data` objects lets PyG handle alignment automatically.
+- **Relative features improve learning**: Using `[is_me, is_opp, is_empty]` instead of `[is_p1, is_p2, is_empty]` means the network always sees the game from the current player's perspective. This halves the state space the network needs to learn.
+- **Residual connections prevent over-smoothing**: Deep GCNs without skip connections cause all node embeddings to converge. Residual blocks + batch norm are essential for 6+ layer GNNs.
+- **Dirichlet noise at root**: Without noise, early self-play games are too deterministic and the model converges to bad local optima. AlphaZero's noise injection is critical for exploration.
+- **Temperature schedule**: Using τ=1 early in a game (proportional move sampling) and τ=0 late (greedy) balances exploration during training data generation.
+- **Optimizer state matters**: Re-creating `Adam` every training call destroys accumulated momentum and adaptive learning rate state, severely hurting convergence.
+- **Distance-1 halo is sufficient**: With 6 GCN layers, information propagates 6 hops already. A distance-2 halo creates unnecessarily large graphs that slow down training.
+- **`__new__` in copy**: Using `HeXOGame.__new__(HeXOGame)` avoids calling `__init__` during game state cloning, which is slightly faster during the thousands of MCTS copies.
+- **Platform-specific tuning matters**: M4 MacBook (MPS, 16GB) benefits from more games with fewer sims (fast single-core), while the Dell Precision (CUDA A2000, 32GB) benefits from deeper search (200 sims), larger batches (128), and mixed precision training via AMP/GradScaler to leverage tensor cores.
+- **Mixed precision (AMP)**: The NVIDIA A2000 has FP16 tensor cores. Using `torch.amp.autocast` + `GradScaler` can speed up training batches with minimal accuracy loss.
+- **Max move limit is essential**: With an untrained random model, games on an infinite hex grid can drag on for hundreds of moves without either player getting 6 in a row. Capping at ~100 moves (declared a draw) prevents the first self-play iteration from taking hours.

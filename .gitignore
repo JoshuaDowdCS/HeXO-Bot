@@ -1,0 +1,19 @@
+# Virtual environments
+venv/
+.venv/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Model checkpoints
+*.pth
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

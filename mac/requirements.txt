@@ -1,0 +1,5 @@
+# Requirements for M4 MacBook (Apple Silicon)
+# Standard PyTorch includes MPS support natively
+torch>=2.0
+torch-geometric>=2.4
+numpy
