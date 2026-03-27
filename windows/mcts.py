@@ -97,19 +97,31 @@ class MCTS:
         """Run the GNN on the node's state and create children. Returns the value estimate."""
         node_features, edge_index, sorted_nodes = node.state.get_graph()
 
-        with torch.no_grad():
-            logits, value = self.model(node_features.to(self.device), edge_index.to(self.device))
+        with torch.inference_mode():
+            x = node_features.to(self.device)
+            edge = edge_index.to(self.device)
+            
+            if self.device.type == 'cuda':
+                with torch.amp.autocast('cuda'):
+                    logits, value = self.model(x, edge)
+                    # Convert back to float32 for softmax stability
+                    logits = logits.float()
+            else:
+                logits, value = self.model(x, edge)
 
-        # Filter for empty (legal) cells
-        is_empty = node_features[:, 2].bool()
-        legal_logits = logits[is_empty]
+            # Filter for empty (legal) cells entirely on device
+            is_empty_dev = x[:, 2].bool()
+            legal_logits = logits[is_empty_dev]
 
-        if legal_logits.numel() == 0:
-            node.is_expanded = True
-            return value.item()
+            if legal_logits.numel() == 0:
+                node.is_expanded = True
+                return value.item()
 
-        probs = F.softmax(legal_logits, dim=0).cpu().numpy()
-        candidate_cells = [sorted_nodes[i] for i in range(len(sorted_nodes)) if is_empty[i]]
+            probs = F.softmax(legal_logits, dim=0).cpu().numpy()
+        
+        # Calculate exactly which cells were empty based on the original CPU features
+        is_empty_cpu = node_features[:, 2].bool()
+        candidate_cells = [sorted_nodes[i] for i in range(len(sorted_nodes)) if is_empty_cpu[i]]
 
         action_probs = dict(zip(candidate_cells, probs))
         node.expand(action_probs)
