@@ -23,10 +23,14 @@ class MCTSNode:
         best_score = -float('inf')
         best_action = None
         best_child = None
+        
+        # Pre-compute to avoid math operations inside the tight 2000+ iteration loop
+        sqrt_visits = math.sqrt(self.visits)
 
         for action, child in self.children.items():
-            u = cpuct * child.prior * math.sqrt(self.visits) / (1 + child.visits)
-            score = child.value + u
+            # Inlining property lookup removes thousands of Python function call frame overheads
+            val = child.value_sum / child.visits if child.visits > 0 else 0.0
+            score = val + cpuct * child.prior * sqrt_visits / (1 + child.visits)
             if score > best_score:
                 best_score = score
                 best_action = action
@@ -123,9 +127,9 @@ class MCTS:
 
             probs = F.softmax(legal_logits, dim=0).cpu().numpy()
         
-        # Calculate exactly which cells were empty based on the original CPU features
-        is_empty_cpu = node_features[:, 2].bool()
-        candidate_cells = [sorted_nodes[i] for i in range(len(sorted_nodes)) if is_empty_cpu[i]]
+        # Calculate exactly which cells were empty using lightning-fast zip iteration
+        is_empty_cpu = node_features[:, 2].bool().tolist()
+        candidate_cells = [n for n, is_emp in zip(sorted_nodes, is_empty_cpu) if is_emp]
 
         action_probs = dict(zip(candidate_cells, probs))
         node.expand(action_probs)
