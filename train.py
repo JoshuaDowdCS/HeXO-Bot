@@ -94,7 +94,8 @@ def train_step(model, optimizer, replay_buffer, batch_size=64):
 
     model.train()
     batch_list = replay_buffer.sample(batch_size)
-    data_batch = Batch.from_data_list(batch_list)
+    device = next(model.parameters()).device
+    data_batch = Batch.from_data_list(batch_list).to(device)
 
     optimizer.zero_grad()
 
@@ -161,8 +162,11 @@ def evaluate_models(challenger, best_model, num_games=40, num_sims=50):
 
 
 def main():
-    best_model = GNNModel()
-    challenger = GNNModel()
+    device = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
+    print(f"Using device: {device}")
+    
+    best_model = GNNModel().to(device)
+    challenger = GNNModel().to(device)
     challenger.load_state_dict(best_model.state_dict())
 
     optimizer = optim.Adam(challenger.parameters(), lr=1e-3, weight_decay=1e-4)

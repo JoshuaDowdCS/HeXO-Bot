@@ -15,11 +15,16 @@ def axial_distance(p1, p2):
     q2, r2 = p2
     return (abs(q1 - q2) + abs(q1 + r1 - q2 - r2) + abs(r1 - r2)) // 2
 
+_DIST_OFFSETS_CACHE = {}
+
 def get_cells_within_distance(center, dist):
     """Return all (q, r) cells within a given distance from a center (q, r)."""
-    cells = []
+    if dist not in _DIST_OFFSETS_CACHE:
+        offsets = []
+        for dq in range(0 - dist, dist + 1):
+            for dr in range(max(0 - dist, (0 - dq) - dist), min(dist, (0 - dq) + dist) + 1):
+                offsets.append((dq, dr))
+        _DIST_OFFSETS_CACHE[dist] = offsets
+
     qc, rc = center
-    for dq in range(0 - dist, dist + 1):
-        for dr in range(max(0 - dist, (0 - dq) - dist), min(dist, (0 - dq) + dist) + 1):
-            cells.append((qc + dq, rc + dr))
-    return cells
+    return [(qc + dq, rc + dr) for dq, dr in _DIST_OFFSETS_CACHE[dist]]

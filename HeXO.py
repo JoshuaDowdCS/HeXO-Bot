@@ -2,6 +2,8 @@
 import torch
 from utils import get_neighbors, get_cells_within_distance
 
+_GLOBAL_GRAPH_CACHE = {}
+
 
 class HeXOGame:
     def __init__(self):
@@ -117,37 +119,44 @@ class HeXOGame:
             sorted_nodes, node_to_idx, edge_index = self._graph_cache
             base_x = self._base_x_cache
         else:
-            node_set = set()
-            for pos in prior_pieces:
-                node_set.update(get_cells_within_distance(pos, 8))
-                
-            for pos in self.board:
-                node_set.add(pos)
-
-            if not node_set:
-                node_set.add((0, 0))
-
-            sorted_nodes = sorted(node_set)
-            node_to_idx = {n: i for i, n in enumerate(sorted_nodes)}
-
-            # Cache the base features tensor (coordinates)
-            base_x = torch.zeros((len(sorted_nodes), 5), dtype=torch.float)
-            for i, (q, r) in enumerate(sorted_nodes):
-                base_x[i, 3] = float(q)
-                base_x[i, 4] = float(r)
-
-            edges = []
-            for i, (q, r) in enumerate(sorted_nodes):
-                for nb in get_neighbors(q, r):
-                    j = node_to_idx.get(nb)
-                    if j is not None:
-                        edges.append([i, j])
-
-            if edges:
-                edge_index = torch.tensor(edges, dtype=torch.long).t().contiguous()
+            prior_pieces_fns = frozenset(prior_pieces)
+            global _GLOBAL_GRAPH_CACHE
+            if prior_pieces_fns in _GLOBAL_GRAPH_CACHE:
+                sorted_nodes, node_to_idx, edge_index, base_x = _GLOBAL_GRAPH_CACHE[prior_pieces_fns]
             else:
-                edge_index = torch.empty((2, 0), dtype=torch.long)
-                
+                node_set = set()
+                for pos in prior_pieces:
+                    node_set.update(get_cells_within_distance(pos, 8))
+                    
+                for pos in self.board:
+                    node_set.add(pos)
+
+                if not node_set:
+                    node_set.add((0, 0))
+
+                sorted_nodes = sorted(node_set)
+                node_to_idx = {n: i for i, n in enumerate(sorted_nodes)}
+
+                # Cache the base features tensor (coordinates)
+                base_x = torch.zeros((len(sorted_nodes), 5), dtype=torch.float)
+                for i, (q, r) in enumerate(sorted_nodes):
+                    base_x[i, 3] = float(q)
+                    base_x[i, 4] = float(r)
+
+                edges = []
+                for i, (q, r) in enumerate(sorted_nodes):
+                    for nb in get_neighbors(q, r):
+                        j = node_to_idx.get(nb)
+                        if j is not None:
+                            edges.append([i, j])
+
+                if edges:
+                    edge_index = torch.tensor(edges, dtype=torch.long).t().contiguous()
+                else:
+                    edge_index = torch.empty((2, 0), dtype=torch.long)
+                    
+                _GLOBAL_GRAPH_CACHE[prior_pieces_fns] = (sorted_nodes, node_to_idx, edge_index, base_x)
+
             self._graph_cache = (sorted_nodes, node_to_idx, edge_index)
             self._cached_prior_pieces = prior_pieces_tuple
             self._base_x_cache = base_x

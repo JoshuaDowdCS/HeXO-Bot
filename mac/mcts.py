@@ -32,6 +32,12 @@ class MCTSNode:
                 best_action = action
                 best_child = child
 
+        # Lazy instantiation of child state
+        if best_child is not None and best_child.state is None:
+            new_state = self.state.copy()
+            new_state.step(*best_action)
+            best_child.state = new_state
+
         return best_action, best_child
 
     def expand(self, action_probs):
@@ -41,9 +47,8 @@ class MCTSNode:
         self.is_expanded = True
         for action, prob in action_probs.items():
             if action not in self.children:
-                new_state = self.state.copy()
-                new_state.step(*action)
-                self.children[action] = MCTSNode(new_state, parent=self, prior=prob)
+                # Lazy load: don't copy state until traversed
+                self.children[action] = MCTSNode(None, parent=self, prior=prob)
 
 
 class MCTS:
@@ -97,18 +102,25 @@ class MCTS:
         """Run the GNN on the node's state and create children. Returns the value estimate."""
         node_features, edge_index, sorted_nodes = node.state.get_graph()
 
-        with torch.no_grad():
-            logits, value = self.model(node_features.to(self.device), edge_index.to(self.device))
+        x_dev = node_features.to(self.device)
+        edge_dev = edge_index.to(self.device)
 
-        # Filter for empty (legal) cells
+        with torch.inference_mode():
+            logits, value = self.model(x_dev, edge_dev)
+
+            # Filter for empty (legal) cells completely ON DEVICE to avoid PCIe sync stall
+            is_empty_dev = x_dev[:, 2].bool()
+            legal_logits = logits[is_empty_dev]
+
+            if legal_logits.numel() == 0:
+                node.is_expanded = True
+                return value.item()
+
+            probs_dev = F.softmax(legal_logits, dim=0)
+            # Sync back only the final probability distribution
+            probs = probs_dev.cpu().numpy()
+
         is_empty = node_features[:, 2].bool()
-        legal_logits = logits[is_empty]
-
-        if legal_logits.numel() == 0:
-            node.is_expanded = True
-            return value.item()
-
-        probs = F.softmax(legal_logits, dim=0).cpu().numpy()
         candidate_cells = [sorted_nodes[i] for i in range(len(sorted_nodes)) if is_empty[i]]
 
         action_probs = dict(zip(candidate_cells, probs))

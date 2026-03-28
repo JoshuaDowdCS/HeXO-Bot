@@ -58,8 +58,13 @@ def self_play(model, num_games=SELF_PLAY_GAMES, num_sims=SELF_PLAY_SIMS,
         game_history = []
         move_count = 0
 
+        game_start = time.time()
         while not game.done and move_count < MAX_MOVES:
+            move_start = time.time()
             root = mcts_engine.search(game, num_sims)
+            move_time = time.time() - move_start
+            sps = num_sims / move_time if move_time > 0 else 0
+
             temp = 1.0 if move_count < temp_threshold else 0.0
             best_move, policy = mcts_engine.get_policy(root, temperature=temp)
 
@@ -73,7 +78,7 @@ def self_play(model, num_games=SELF_PLAY_GAMES, num_sims=SELF_PLAY_SIMS,
 
             game.step(*best_move)
             move_count += 1
-            pbar.set_postfix_str(f"moves={move_count}")
+            pbar.set_postfix_str(f"moves={move_count} sps={sps:.1f}")
 
         winner = game.winner
         for graph_data, policy, player, sorted_nodes in game_history:
@@ -172,6 +177,8 @@ def main():
     gpu_info = ""
     if DEVICE.type == 'cuda':
         gpu_info = f" ({torch.cuda.get_device_name(0)})"
+    elif DEVICE.type == 'mps':
+        gpu_info = " (Apple Silicon)"
     print(f"HeXO Training — Device: {DEVICE}{gpu_info}")
     print(f"Config: {SELF_PLAY_GAMES} games × {SELF_PLAY_SIMS} sims, "
           f"batch={TRAIN_BATCH_SIZE}, buffer={REPLAY_CAPACITY}, AMP={USE_AMP}")
@@ -180,6 +187,16 @@ def main():
     best_model = GNNModel().to(DEVICE)
     challenger = GNNModel().to(DEVICE)
     challenger.load_state_dict(best_model.state_dict())
+
+    # Requested hidden layer and model info
+    num_params = sum(p.numel() for p in best_model.parameters())
+    print("-" * 50)
+    print(f"MODEL DIAGNOSTICS:")
+    print(f"Hidden Dim: {best_model.input_proj.out_features}")
+    print(f"GCN Layers: {len(best_model.blocks)}")
+    print(f"Total Params: {num_params:,}")
+    print("-" * 50)
+    print()
 
     optimizer = optim.Adam(challenger.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
     scaler = GradScaler(enabled=USE_AMP)

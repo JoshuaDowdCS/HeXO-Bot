@@ -57,7 +57,11 @@ def self_play(model, num_games=SELF_PLAY_GAMES, num_sims=SELF_PLAY_SIMS,
         move_count = 0
 
         while not game.done and move_count < MAX_MOVES:
+            move_start = time.time()
             root = mcts_engine.search(game, num_sims)
+            move_time = time.time() - move_start
+            sps = num_sims / move_time if move_time > 0 else 0
+
             temp = 1.0 if move_count < temp_threshold else 0.0
             best_move, policy = mcts_engine.get_policy(root, temperature=temp)
 
@@ -71,7 +75,7 @@ def self_play(model, num_games=SELF_PLAY_GAMES, num_sims=SELF_PLAY_SIMS,
 
             game.step(*best_move)
             move_count += 1
-            pbar.set_postfix_str(f"moves={move_count}")
+            pbar.set_postfix_str(f"moves={move_count} sps={sps:.1f}")
 
         winner = game.winner
         for graph_data, policy, player, sorted_nodes in game_history:
@@ -169,9 +173,21 @@ def main():
           f"batch={TRAIN_BATCH_SIZE}, buffer={REPLAY_CAPACITY}")
     print()
 
-    best_model = GNNModel().to(DEVICE)
-    challenger = GNNModel().to(DEVICE)
+    # A really small model for quick testing on Mac
+    best_model = GNNModel(hidden_dim=32, num_layers=2).to(DEVICE)
+    challenger = GNNModel(hidden_dim=32, num_layers=2).to(DEVICE)
     challenger.load_state_dict(best_model.state_dict())
+
+    # Print requested diagnostic hidden layer and model info!
+    num_params = sum(p.numel() for p in best_model.parameters())
+    print("-" * 50)
+    print(f"MODEL DIAGNOSTICS:")
+    print(f"Hidden Dimensions: {best_model.input_proj.out_features}")
+    print(f"Number of GCN Layers: {len(best_model.blocks)}")
+    print(f"Total Parameters: {num_params:,}")
+    print(f"Model Device Placement: {next(best_model.parameters()).device}")
+    print("-" * 50)
+    print()
 
     optimizer = optim.Adam(challenger.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
     replay_buffer = ReplayBuffer()
