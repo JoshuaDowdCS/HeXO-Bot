@@ -1,6 +1,8 @@
 # Requirements for Dell Precision 5680 (NVIDIA A2000, CUDA)
 # Install PyTorch with CUDA 12.1 first:
 #   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+# Next, install torch-scatter to enable accelerated CUDA GCN convolutions:
+#   pip install torch-scatter -f https://data.pyg.org/whl/torch-2.1.0+cu121.html  (Match 2.1.0 to your actual torch version!)
 # Then install:
 torch-geometric>=2.4
 numpy
