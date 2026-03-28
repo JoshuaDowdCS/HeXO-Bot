@@ -6,7 +6,7 @@ import torch.nn.functional as F
 
 
 class MCTSNode:
-    def __init__(self, state, parent=None, prior=0.0):
+    def __init__(self, state=None, parent=None, prior=0.0):
         self.state = state  # HeXOGame instance
         self.parent = parent
         self.children = {}  # (q, r) -> MCTSNode
@@ -41,9 +41,8 @@ class MCTSNode:
         self.is_expanded = True
         for action, prob in action_probs.items():
             if action not in self.children:
-                new_state = self.state.copy()
-                new_state.step(*action)
-                self.children[action] = MCTSNode(new_state, parent=self, prior=prob)
+                # Lazy instantiation: don't copy the game state 2000 times!
+                self.children[action] = MCTSNode(state=None, parent=self, prior=prob)
 
 
 class MCTS:
@@ -74,7 +73,12 @@ class MCTS:
 
             # Selection
             while current.is_expanded and not current.state.done:
-                _, current = current.select_child(self.cpuct)
+                action, child = current.select_child(self.cpuct)
+                if child.state is None:
+                    # Instantiate state only when actually explored, saving 99% of copying overhead
+                    child.state = current.state.copy()
+                    child.state.step(*action)
+                current = child
 
             # Expansion & Evaluation
             if not current.state.done:
